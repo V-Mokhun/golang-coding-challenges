@@ -1,11 +1,16 @@
 package main
 
 import (
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -74,4 +79,57 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst interface{}) err
 	}
 
 	return nil
+}
+
+func shortenUrl(urlToShorten string) (DBUrl, error) {
+	key := hashUrl(urlToShorten)
+	shortenedKey := key[:KEY_LENGTH]
+	existingUrl, err := queryUrl(shortenedKey)
+
+	// if key does not exist in db
+	if err != nil {
+		newUrl := DBUrl{
+			Key:      shortenedKey,
+			ShortUrl: "http://localhost/" + shortenedKey,
+			LongUrl:  urlToShorten,
+		}
+
+		if err == sql.ErrNoRows {
+			return insertUrl(newUrl)
+		} else {
+			return newUrl, err
+		}
+	}
+
+	return existingUrl, nil
+}
+
+func hashUrl(urlToHash string) string {
+	hash := sha256.Sum256([]byte(constructUrl(urlToHash)))
+	return hex.EncodeToString(hash[:])
+}
+
+func constructUrl(urlToConstruct string) string {
+	u, err := url.Parse(urlToConstruct)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	hostname := u.Hostname()
+	var newUrl string
+	if strings.HasPrefix(hostname, "www.") {
+		newUrl = hostname[4:]
+	} else {
+		newUrl = hostname
+	}
+	newUrl += u.EscapedPath()
+	if u.RawQuery != "" {
+		newUrl += "?" + u.RawQuery
+	}
+	if u.EscapedFragment() != "" {
+		newUrl += "#" + u.EscapedFragment()
+	}
+
+	return newUrl
 }
