@@ -2,14 +2,39 @@ package main
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"net/url"
+	"os"
 	"strings"
+
+	"github.com/go-sql-driver/mysql"
 )
 
+var db *sql.DB
+
 func main() {
+	cfg := mysql.Config{
+		User:   os.Getenv("DBUSER"),
+		Passwd: os.Getenv("DBPASS"),
+		Net:    "tcp",
+		Addr:   "127.0.0.1:3306",
+		DBName: "url_shortener",
+	}
+	var err error
+	db, err = sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	pingErr := db.Ping()
+	if pingErr != nil {
+		log.Fatal(pingErr)
+	}
+
 	fmt.Println(hashUrl("https://www.google.com/search?q=hash&oq=something#something"))
 }
 
