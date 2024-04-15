@@ -4,8 +4,11 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -14,9 +17,13 @@ import (
 )
 
 type DBUrl struct {
-	key       string
-	short_url string
-	long_url  string
+	Key      string `json:"key"`
+	ShortUrl string `json:"shortUrl"`
+	LongUrl  string `json:"longUrl"`
+}
+
+type ApiURL struct {
+	Url string `json:"url"`
 }
 
 const KEY_LENGTH int = 8
@@ -25,13 +32,38 @@ var db *sql.DB
 
 func main() {
 	connectToDB()
-	defer db.Close()
 
-	res, err := shortenUrl("https://www.google.com/search?q=hash&oq=something#something")
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(res)
+	http.HandleFunc("/shorten", func(w http.ResponseWriter, r *http.Request) {
+		var url ApiURL
+		err := decodeJSONBody(w, r, &url)
+		if err != nil {
+			var mr *malformedRequest
+			if errors.As(err, &mr) {
+				http.Error(w, mr.msg, mr.status)
+			} else {
+				log.Print(err.Error())
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+			return
+		}
+
+		shortenedUrl, err := shortenUrl(url.Url)
+		if err != nil {
+			log.Print("Shorten url error:", err.Error())
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+
+		shortenedUrlJson, err := json.Marshal(shortenedUrl)
+		if err != nil {
+			log.Print("Marshal error:", err.Error())
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(shortenedUrlJson)
+	})
+
+	http.ListenAndServe(":8080", nil)
 }
 
 func connectToDB() {
@@ -58,7 +90,7 @@ func queryUrl(key string) (DBUrl, error) {
 	var url DBUrl
 
 	row := db.QueryRow("SELECT * FROM url WHERE `key` = ?", key)
-	if err := row.Scan(&url.key, &url.long_url, &url.short_url); err != nil {
+	if err := row.Scan(&url.Key, &url.LongUrl, &url.ShortUrl); err != nil {
 		if err == sql.ErrNoRows {
 			return url, sql.ErrNoRows
 		}
@@ -68,33 +100,33 @@ func queryUrl(key string) (DBUrl, error) {
 	return url, nil
 }
 
-func shortenUrl(urlToShorten string) (string, error) {
+func shortenUrl(urlToShorten string) (DBUrl, error) {
 	key := hashUrl(urlToShorten)
 	shortenedKey := key[:KEY_LENGTH]
-	_, err := queryUrl(shortenedKey)
+	existingUrl, err := queryUrl(shortenedKey)
 
 	// if key does not exist in db
 	if err != nil {
-		if err == sql.ErrNoRows {
-			_, insertErr := db.Exec("INSERT INTO url (`key`, long_url, short_url) VALUES(?, ?, ?)", shortenedKey, urlToShorten, "http://localhost/"+shortenedKey)
+		newUrl := DBUrl{
+			Key:      shortenedKey,
+			ShortUrl: "http://localhost/" + shortenedKey,
+			LongUrl:  urlToShorten,
+		}
 
-			// TODO: handle insertion error http
+		if err == sql.ErrNoRows {
+			_, insertErr := db.Exec("INSERT INTO url (`key`, long_url, short_url) VALUES(?, ?, ?)", newUrl.Key, newUrl.LongUrl, newUrl.ShortUrl)
+
 			if insertErr != nil {
-				return shortenedKey, insertErr
+				return newUrl, insertErr
 			}
 
-			fmt.Println("inserted key: " + shortenedKey)
-
-			// TODO: handle http 200 status
-			return shortenedKey, nil
+			return newUrl, nil
 		} else {
-			// TODO: handle http status when error
-			return shortenedKey, err
+			return newUrl, err
 		}
 	}
 
-	// TODO: handle url already exists
-	return shortenedKey, nil
+	return existingUrl, nil
 }
 
 func hashUrl(urlToHash string) string {
