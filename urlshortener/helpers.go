@@ -90,7 +90,7 @@ func shortenUrl(urlToShorten string) (DBUrl, error) {
 	if err != nil {
 		newUrl := DBUrl{
 			Key:      shortenedKey,
-			ShortUrl: "http://localhost/" + shortenedKey,
+			ShortUrl: "http://localhost:8080/" + shortenedKey,
 			LongUrl:  urlToShorten,
 		}
 

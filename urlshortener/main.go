@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"html/template"
 	"log"
 	"net/http"
 )
@@ -25,8 +26,9 @@ var db *sql.DB
 func main() {
 	connectToDB()
 
-	http.HandleFunc("/shorten", handleShorten)
 	http.HandleFunc("/", handleRedirectAndDelete)
+	http.HandleFunc("/shorten", handleShorten)
+	http.HandleFunc("/view", handleView)
 
 	http.ListenAndServe(":8080", nil)
 }
@@ -85,4 +87,18 @@ func handleRedirectAndDelete(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Location", dbUrl.LongUrl)
 	http.Redirect(w, r, dbUrl.LongUrl, http.StatusFound)
+}
+
+func handleView(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+	fileName := "templates/index.html"
+
+	t, _ := template.ParseFiles(fileName)
+	err := t.Execute(w, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }

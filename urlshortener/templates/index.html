@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Url Shortener in Go</title>
+
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			margin: 0;
+			padding: 0;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 100vh;
+			background-color: #f0f0f0;
+		}
+
+		h1 {
+			text-align: center;
+			margin-bottom: 20px;
+		}
+
+		form {
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			gap: 10px;
+			margin-top: 15px;
+		}
+
+		input[type="text"] {
+			padding: 10px;
+			border: 1px solid #ccc;
+			border-radius: 5px;
+			width: 300px;
+		}
+
+		button {
+			padding: 10px 20px;
+			border: none;
+			border-radius: 5px;
+			background-color: #007bff;
+			color: #fff;
+			cursor: pointer;
+		}
+
+		.error {
+			display: none;
+			color: red;
+			text-align: center;
+			margin-top: 10px;
+		}
+
+		.shortened {
+			display: none;
+			justify-content: center;
+			align-items: center;
+			gap: 10px;
+			margin-top: 20px;
+		}
+
+		.shortened-url {
+			color: #007bff;
+		}
+
+		.delete-button {
+			background: red;
+		}
+
+		.delete-message {
+			text-align: center;
+			margin-top: 10px;
+		}
+	</style>
+</head>
+
+<body>
+	<div>
+		<h1>Shorten url</h1>
+		<form action="#">
+			<input type="text" name="url" id="url" placeholder="Enter url to shorten">
+			<button type="submit">Shorten</button>
+		</form>
+		<p class="error"></p>
+		<div class="shortened">
+			<span>Your shortened url: </span>
+			<a class="shortened__url" href="#"></a>
+		</div>
+
+		<form class="delete-form" action="#">
+			<input class="delete-input" type="text" name="delete" id="delete" placeholder="Enter unique key to delete">
+			<button class="delete-button" type="submit">Delete</button>
+		</form>
+		<p class="delete-message"></p>
+	</div>
+
+	<script>
+		const form = document.querySelector('form');
+		const input = document.querySelector('input[type="text"]');
+		const error = document.querySelector('.error');
+		const shortened = document.querySelector('.shortened');
+		const shortenedUrl = document.querySelector('.shortened__url');
+
+		form.addEventListener('submit', async (e) => {
+			e.preventDefault();
+
+			const url = input.value;
+
+			try {
+				const response = await fetch('/shorten', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify({ url })
+				});
+
+				const data = await response.json();
+
+				shortened.style.display = 'flex';
+				error.style.display = 'none';
+
+				shortenedUrl.textContent = data.shortUrl;
+				shortenedUrl.href = data.shortUrl;
+			} catch (err) {
+				shortened.style.display = 'none';
+				error.textContent = err;
+				error.style.display = 'block';
+			}
+		});
+
+		const deleteForm = document.querySelector('.delete-form')
+		const deleteInput = document.querySelector('.delete-input')
+		const deleteButton = document.querySelector('.delete-button')
+		const deleteMessage = document.querySelector('.delete-message')
+
+		deleteForm.addEventListener('submit', async (e) => {
+			e.preventDefault();
+
+			const key = deleteInput.value;
+
+			const response = await fetch('/' + key, {
+				method: 'DELETE',
+			});
+			
+			if (!response.ok) {
+				deleteMessage.textContent = "Failed to delete!"
+				deleteMessage.style.color = "red"
+				return
+			}
+
+			deleteMessage.textContent = "Deleted successfully!"
+			deleteMessage.style.color = "green"
+		});
+	</script>
+</body>
+
+</html>
